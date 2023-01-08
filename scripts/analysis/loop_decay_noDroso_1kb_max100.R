@@ -21,12 +21,12 @@ merged_hicFiles <- list.files(c("data/raw/hic/hg38/220716_dietJuicerMerge_condit
 dm_hic <- "data/raw/hic/dm/Kc_allcombined.hic"
 
 # Load in and create GInteractions from d. mel loops
-dmLoops <- fread("data/processed/hic/diffLoops/dm/Pc_loopsKc_1kb.txt")
+dmLoops <- fread("data/processed/hic/dm6/loops/Pc_loopsKc_1kb.txt")
 dmLoops <- dmLoops |> 
   as_ginteractions()
 
 ## Load in non-d. mel loops and convert to 1kb resolution
-noDroso_loops <- readRDS("data/processed/hic/diffLoops/noDroso/diffLoops_noDroso_10kb.rds") |>
+noDroso_loops <- readRDS("data/processed/hic/hg38/diffLoops/noDroso/diffLoops_noDroso_10kb.rds") |>
   interactions() |>
   binPairs(binSize = 1e3,
            pos1 = "center",
@@ -137,7 +137,7 @@ colnames(zero_gained) <- as.character(c(0:100))
 
 Group_gained <- factor(0:100)
 normalized_gained <- na.omit(zero_gained)
-saveRDS(normalized_gained, "data/processed/hic/loop_decay/noDroso/gainedLoops_1kb_max100_mh_index.rds")
+saveRDS(normalized_gained, "data/processed/hic/hg38/loop_decay/noDroso/gainedLoops_1kb_max100_mh_index.rds")
 
 # loop decay for nullSet loops within control .hic file ---------------------------------------
 ## MatchedGInteractions to GInteractions
@@ -182,7 +182,7 @@ colnames(zero_nullSet) <- as.character(c(0:100))
 
 Group_nullSet<- factor(0:100)
 normalized_nullSet <- na.omit(zero_nullSet)
-saveRDS(normalized_nullSet, "data/processed/hic/loop_decay/noDroso/nullSet_1kb_max100_mh_index.rds")
+saveRDS(normalized_nullSet, "data/processed/hic/hg38/loop_decay/noDroso/nullSet_1kb_max100_mh_index.rds")
 
 
 # loop decay for ctcfLoops within control .hic file -----------------------
@@ -271,21 +271,21 @@ saveRDS(normalized_dm, "data/processed/hic/loop_decay/noDroso/dmLoops_1kb_max100
 
 # load processed data and convert to dataframes ---------------------------
 
-normalized_gained <- readRDS("data/processed/hic/loop_decay/noDroso/gainedLoops_1kb_max100_mh_index.rds")
+normalized_gained <- readRDS("data/processed/hic/hg38/loop_decay/noDroso/gainedLoops_1kb_max100_mh_index.rds")
 ## convert to dataframe
 Group_gained <- factor(0:100)
 Mean_gained <- as.vector(colMeans(normalized_gained))
 df_gained <- data.frame(Group_gained,Mean_gained)
 df_gained
 
-normalized_nullSet <- readRDS("data/processed/hic/loop_decay/noDroso/nullSet_1kb_max100_mh_index.rds")
+normalized_nullSet <- readRDS("data/processed/hic/hg38/loop_decay/noDroso/nullSet_1kb_max100_mh_index.rds")
 ## convert to dataframe
 Group_nullSet <- factor(0:100)
 Mean_nullSet <- as.vector(colMeans(normalized_nullSet))
 df_nullSet <- data.frame(Group_nullSet,Mean_nullSet)
 df_nullSet
 
-normalized_dm <- readRDS("data/processed/hic/loop_decay/noDroso/dmLoops_1kb_max100_mh_index.rds")
+normalized_dm <- readRDS("data/processed/hic/dm6/loop_decay/dmLoops_1kb_max100_mh_index.rds")
 ## convert to dataframe
 Group_dm <- factor(0:100)
 Mean_dm <- as.vector(colMeans(normalized_dm))
