@@ -186,45 +186,45 @@ saveRDS(normalized_nullSet, "data/processed/hic/hg38/loop_decay/bothDroso/nullSe
 
 # loop decay for ctcfLoops within control .hic file -----------------------
 
-# # calculate APA matrices for ctcf loops in control .hic file
-# normalized_ctcf = data.frame()
-# 
-# for(j in seq_along(ctcfLoops)){
-#   l <- 
-#     ctcfLoops[j] |>
-#     pixelsToMatrices(buffer=100) |>
-#     pullHicMatrices(binSize = 1e03,
-#                     files = merged_hicFiles[1],
-#                     half = "upper",
-#                     norm = "VC_SQRT",
-#                     matrix = "observed",
-#                     onDisk = F) |> 
-#     aggHicMatrices(FUN=sum) |> 
-#     as.matrix()
-#   for(i in 0:100){
-#     normalized_ctcf[j,i+1]<- median(mh_index(buffer = 100, loop = l, inner = i))
-#   }
-# }
-# head(normalized_ctcf)
-# colnames(normalized_ctcf) <- as.character(c(0:100))
-# 
-# #Convert data by setting 100 kb as 0 (subtract 100kb value from all values) and center pixel as 1 (divide all values to center pixel)
-# zero_ctcf=data.frame()
-# for(i in seq_along(ctcfLoops)){
-#   for(j in 1:101){
-#     a <- normalized_ctcf[i,1]-normalized_ctcf[i,101]
-#     b <- normalized_ctcf[i,j]-normalized_ctcf[i,101]
-#     zero_ctcf[i,j] <- round((b/a),2)
-#   }
-#   
-# }
-# head(zero_ctcf)
-# colnames(zero_ctcf) <- as.character(c(0:100))
-# 
-# 
-# Group_ctcf <- factor(0:100)
-# normalized_ctcf <- na.omit(zero_ctcf)
-# saveRDS(normalized_ctcf, "data/processed/hic/hg38/loop_decay/bothDroso/ctcfLoops_bothDroso_1kb_max100_mh_index.rds")
+# calculate APA matrices for ctcf loops in control .hic file
+normalized_ctcf = data.frame()
+
+for(j in seq_along(ctcfLoops)){
+  l <-
+    ctcfLoops[j] |>
+    pixelsToMatrices(buffer=100) |>
+    pullHicMatrices(binSize = 1e03,
+                    files = merged_hicFiles[1],
+                    half = "upper",
+                    norm = "VC_SQRT",
+                    matrix = "observed",
+                    onDisk = F) |>
+    aggHicMatrices(FUN=sum) |>
+    as.matrix()
+  for(i in 0:100){
+    normalized_ctcf[j,i+1]<- median(mh_index(buffer = 100, loop = l, inner = i))
+  }
+}
+head(normalized_ctcf)
+colnames(normalized_ctcf) <- as.character(c(0:100))
+
+#Convert data by setting 100 kb as 0 (subtract 100kb value from all values) and center pixel as 1 (divide all values to center pixel)
+zero_ctcf=data.frame()
+for(i in seq_along(ctcfLoops)){
+  for(j in 1:101){
+    a <- normalized_ctcf[i,1]-normalized_ctcf[i,101]
+    b <- normalized_ctcf[i,j]-normalized_ctcf[i,101]
+    zero_ctcf[i,j] <- round((b/a),2)
+  }
+
+}
+head(zero_ctcf)
+colnames(zero_ctcf) <- as.character(c(0:100))
+
+
+Group_ctcf <- factor(0:100)
+normalized_ctcf <- na.omit(zero_ctcf)
+saveRDS(normalized_ctcf, "data/processed/hic/hg38/loop_decay/bothDroso/ctcfLoops_bothDroso_1kb_max100_mh_index.rds")
 
 # loop decay for D. mel loops within D. mel .hic file ---------------------------------------
 
@@ -291,20 +291,17 @@ Mean_dm <- as.vector(colMeans(normalized_dm))
 df_dm <- data.frame(Group_dm,Mean_dm)
 df_dm
 
-# normalized_ctcf <- readRDS("data/processed/hic/hg38/loop_decay/bothDroso/ctcfLoops_1kb_max100_mh_index.rds")
-# ## convert to dataframe
-# Group_ctcf <- factor(0:100)
-# Mean_ctcf <- as.vector(colMeans(normalized_ctcf))
-# df_ctcf <- data.frame(Group_ctcf,Mean_ctcf)
-# df_ctcf
+normalized_ctcf <- readRDS("data/processed/hic/hg38/loop_decay/bothDroso/ctcfLoops_1kb_max100_mh_index.rds")
+## convert to dataframe
+Group_ctcf <- factor(0:100)
+Mean_ctcf <- as.vector(colMeans(normalized_ctcf))
+df_ctcf <- data.frame(Group_ctcf,Mean_ctcf)
+df_ctcf
 
 # final dataframe for plotting --------------------------------------------
 
-# df <- cbind(df_gained, df_nullSet, df_dm, df_ctcf) |> 
-#   dplyr::select(Mean_nullSet, Mean_gained, Mean_dm, Mean_ctcf)
-
-df <- cbind(df_gained, df_nullSet, df_dm) |> 
-  dplyr::select(Mean_nullSet, Mean_gained, Mean_dm)
+df <- cbind(df_gained, df_nullSet, df_dm, df_ctcf) |>
+  dplyr::select(Mean_nullSet, Mean_gained, Mean_dm, Mean_ctcf)
 
 df$Group <- factor(seq(0,100))
 
@@ -330,8 +327,8 @@ library(ggplot2)
               color= "blue") +
     # geom_point(aes(y = Mean_ctcf),
     #            color= "#4F7942") +
-    # geom_line(aes(y = Mean_ctcf),
-    #           color= "#4F7942") +
+    geom_line(aes(y = Mean_ctcf),
+              color= "#4F7942") +
     xlab("Distance from the center (kb)") + 
     ylab("Signal relative to the center") +
     coord_cartesian(ylim = c(0, 1)) +
