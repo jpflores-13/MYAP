@@ -61,7 +61,10 @@ plots/diffLoops_bothDroso_10kb_MA.pdf\
 plots/diffLoops_noDroso_10kb_MA.pdf\
 plots/diffLoops_isDroso_10kb_MA.pdf\
 plots/drosoAnalysis_10kb.pdf\
-plots/drosoAnalysis_5kb.pdf
+plots/drosoAnalysis_5kb.pdf\
+plots/EGFP-YAP_ChIP_surveyPlot_10kb.pdf\
+plots/genotypeComparison_apa.pdf\
+plots/motifEnrichment_ame.pdf
 
 all: $(objects)
 	echo done!
@@ -253,3 +256,23 @@ plots/drosoAnalysis_5kb.pdf:\
 	data/processed/hic/hg38/diffLoops/*
 		mkdir -p plots
 		Rscript scripts/analysis/drosoAnalysis_5kb.R
+		
+plots/EGFP-YAP_ChIP_surveyPlot_10kb.pdf:\
+	scripts/analysis/EGFP-YAP_ChIP_surveyPlot_10kb.R\
+	data/processed/hic/hg38/diffLoops/noDroso/diffLoops_noDroso_10kb.rds
+		mkdir -p plots
+		Rscript scripts/analysis/EGFP-YAP_ChIP_surveyPlot_10kb.R
+		
+plots/genotypeComparison_apa.pdf:\
+	scripts/analysis/genotypeComparison_apa.R\
+	data/processed/hic/hg38/diffLoops/noDroso/diffLoops_noDroso_10kb.rds
+		mkdir -p plots
+		Rscript scripts/analysis/genotypeComparison_apa.R
+		
+plots/motifEnrichment_ame.pdf:\
+	scripts/analysis/motifEnrichment_ame.R\
+	data/processed/hic/hg38/diffLoops/noDroso/diffLoops_noDroso_10kb.rds\
+	data/processed/atac/hg38/diff_ATACcounts.rds
+		mkdir -p plots
+		Rscript scripts/analysis/motifEnrichment_ame.R
+	
