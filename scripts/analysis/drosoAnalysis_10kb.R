@@ -13,7 +13,7 @@ library(TxDb.Hsapiens.UCSC.hg38.knownGene)
 library(mariner)
 library(plyranges)
 
-diff_loopCounts <- readRDS("data/processed/hic/hg38/diffLoops/bothDroso/diffLoops_bothDroso_10kb.rds")
+diff_loopCounts <- readRDS("data/processed/hic/hg38/diffLoops/noDroso/diffLoops_noDroso_10kb.rds")
 diff_loopCounts <- interactions(diff_loopCounts) |> 
   as.data.frame() |> 
   as_ginteractions()

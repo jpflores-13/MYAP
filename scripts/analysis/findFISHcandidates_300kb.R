@@ -13,15 +13,15 @@ mcols(loops)$loop_size <- pairdist(loops)
 
 ## create an mcol for loop type
 mcols(loops)$loop_type <- case_when(
-  mcols(loops)$padj < 0.05 & mcols(loops)$log2FoldChange > 1 & 
+  mcols(loops)$padj < 0.1 & mcols(loops)$log2FoldChange > 1 & 
     mcols(loops)$loop_size >= 150000 ~ "truegained",
-  mcols(loops)$padj < 0.05 & mcols(loops)$log2FoldChange > 0 ~ "gained",
-  mcols(loops)$padj < 0.05 & mcols(loops)$log2FoldChange < 0 ~ "lost",
-  mcols(loops)$padj > 0.05 ~ "static",
+  mcols(loops)$padj < 0.1 & mcols(loops)$log2FoldChange > 0 ~ "gained",
+  mcols(loops)$padj < 0.1 & mcols(loops)$log2FoldChange < 0 ~ "lost",
+  mcols(loops)$padj > 0.1 ~ "static",
   is.character("NA") ~ "other")
 
 loops <- loops[mcols(loops)$loop_type == c("truegained", "gained") &
-               mcols(loops)$loop_size >= 500e3]
+               mcols(loops)$loop_size >= 300e3]
 loops <- loops[order(mcols(loops)$loop_size, decreasing = T)]
 
 loops_gr <- 
@@ -34,11 +34,11 @@ loops_gr <-
 # Create survey plots to visualize FISH candidates ------------------------
 
 ## Expand regions by buffer
-buffer <- 200e3
+buffer <- 250e3
 loops_buffed <- loops_gr + buffer
 
 ##make pdf
-pdf(file = "plots/findFISHcandidates.pdf",
+pdf(file = "plots/findFISHcandidates_300kb.pdf",
     width = 5.75,
     height = 5.6)
 
@@ -134,7 +134,7 @@ for(i in seq_along(loops_buffed)){
            fontsize = 10, 
            fontcolor = "black")
   
-  plotText(label = paste0("log2FC < ", signif(mcols(loops)$log2FoldChange[i], digits = 3)),
+  plotText(label = paste0("log2FC : ", signif(mcols(loops)$log2FoldChange[i], digits = 3)),
            params = p, 
            x = 4.25,
            y = 2.8,
@@ -142,7 +142,7 @@ for(i in seq_along(loops_buffed)){
            fontsize = 10,
            fontcolor = "black")
   
-  plotText(label = paste0("padj < ", signif(mcols(loops)$padj[i], digits = 3)),
+  plotText(label = paste0("padj < ", signif(mcols(loops)$pvalue[i], digits = 3)),
            params = p, 
            x = 4.25,
            y = 2.95,

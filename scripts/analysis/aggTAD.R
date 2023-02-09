@@ -5,6 +5,8 @@ library(glue)
 library(nullranges)
 library(data.table)
 library(mariner)
+library(raster)
+library(reshape2)
 
 source("scripts/utils/aggregateLoops.R")
 source("scripts/utils/aggregateTAD.R")
@@ -18,24 +20,19 @@ hicFiles <- list.files(glue("data/raw/hic/hg38/220722_dietJuicerCore/{cond}"),
                        full.names = T)
 
 ## Load in merged HiC files for human and d. mel
-merged_hicFiles <- list.files(c("data/raw/hic/hg38/220716_dietJuicerMerge_condition/sorb",
-                                "data/raw/hic/hg38/220716_dietJuicerMerge_condition/cont"),
+merged_hicFiles <- list.files(glue("data/raw/hic/hg38/220716_dietJuicerMerge_condition/{cond}"),
                               full.names = T)
 
-dm_hic <- "data/raw/hic/dm/Kc_allcombined.hic"
-
-# Load in and create GInteractions from d. mel loops
-dmLoops <- fread("data/processed/hic/dm6/loops/Pc_loopsKc_1kb.txt")
-dmLoops <- dmLoops |> 
-  as_ginteractions() 
 
 ## Load in non-d. mel loops and convert to 1kb resolution
-noDroso_loops <- readRDS("data/processed/hic/hg38/diffLoops/noDroso/diffLoops_noDroso_10kb.rds") |>
+noDroso_loops <- readRDS("data/processed/hic/hg38/diffLoops/noDroso/diffLoops_noDroso_10kb.rds") |> 
   interactions() |> 
+  BiocGenerics::as.data.frame() |> 
+  mariner::as_ginteractions() |> 
   binPairs(binSize = 1e3,
            pos1 = "center",
-           pos2 = "center") |>
-  pullHicPixels(binSize = 10e3,
+           pos2 = "center") |> 
+  pullHicPixels(binSize = 1e3,
                 files = hicFiles,
                 half = "both",
                 norm = "VC_SQRT",
@@ -51,7 +48,8 @@ mcols(noDroso_loops)$loop_size <- pairdist(noDroso_loops)
 mcols(noDroso_loops)$loop_type <- case_when(
   mcols(noDroso_loops)$padj < 0.05 & mcols(noDroso_loops)$log2FoldChange > 1 & 
   mcols(noDroso_loops)$loop_size >= 150000 ~ "truegained",
-  mcols(noDroso_loops)$padj < 0.1 & mcols(noDroso_loops)$log2FoldChange > 0 ~ "gained",
+  mcols(noDroso_loops)$padj < 0.1 & mcols(noDroso_loops)$log2FoldChange > 0 &
+  mcols(noDroso_loops)$loop_size >= 150000 ~ "gained",
   mcols(noDroso_loops)$padj < 0.1 & mcols(noDroso_loops)$log2FoldChange < 0 ~ "lost",
   mcols(noDroso_loops)$padj > 0.1 ~ "static",
   is.character("NA") ~ "other")
@@ -74,8 +72,8 @@ hist(mcols(noDroso_loops)$loop_size) # check for normality
 ## convert all `0` agg_contact values to NAs and log transform for matchRanges
 mcols(noDroso_loops)$agg_contacts[mcols(noDroso_loops)$agg_contacts == 0] <- NA
 noDroso_loops <- interactions(noDroso_loops) |> # no longer InteractionMatrix class
-  as.data.frame() |> 
-  na.omit() |> 
+  as.data.frame() |>
+  na.omit() |>
   as_ginteractions()
 
 mcols(noDroso_loops)$agg_contacts <- log((mcols(noDroso_loops)$agg_contacts + 1))
@@ -83,7 +81,7 @@ hist(mcols(noDroso_loops)$agg_contacts) # check for normality
 
 # Matched set for gained YAPP loops ---------------------------------------
 ## use matchRanges to select a null set of control sample loops that is matched for size & contact frequency
-noDroso_loops <- readRDS('data/processed/hic/hg38/noDroso_loops.rds')
+# noDroso_loops <- readRDS('data/processed/hic/hg38/noDroso_loops.rds')
 focal <- noDroso_loops[!noDroso_loops$loop_type %in% c("static", "lost","other")] 
 pool <- noDroso_loops[noDroso_loops$loop_type %in% c("static", "lost","other")] 
 
@@ -103,42 +101,29 @@ ctcfLoops <- pool
 
 gained_bed <- gainedLoops |> 
   as.data.frame() |> 
-  select(c(1,2,3,6,7,8))
+  dplyr::select(c(1,2,3,6,7,8))
 
 nullSet <- nullSet |> 
   as.data.frame() |> 
-  select(c(1,2,3,6,7,8))
-  
-dm_bed <- dmLoops |> 
-  as.data.frame() |> 
-  select(c(1,2,3,6,7,8))
+  dplyr::select(c(1,2,3,6,7,8))
 
 #------------------------- Plot ATAs of existing vs gained loops in HEKs and T47Ds ---------------------#
 
 aggtad_gain <- aggregateTAD(loops = gained_bed,
                            hic = merged_hicFiles[2],
                            res = 1e3,
-                           buffer = 1000,
-                           norm="VC_SQRT")
+                           buffer = 0.5,
+                           norm = "VC_SQRT")
 
 aggtad_match <- aggregateTAD(loops = nullSet,
                             hic = merged_hicFiles[1],
                             res = 1e3,
-                            buffer = 1000,
+                            buffer = 0.5,
                             norm = "VC_SQRT")
 
-aggtad_dm <- aggregateTAD(loops = dm_bed,
-                            hic = dm_hic,
-                            res = 1e3,
-                            buffer = 1000,
-                            norm = "VC_SQRT")
+plotAggTAD(aggtad_gain,maxval = aggtad_gain[26,75]*1.2,title="Gained YAP loops (1kb res)")
 
-plotAggTAD(aggtad_gain,maxval = aggtad_gain[26,75]*1.2,title="Gained YAP loops")
-
-plotAggTAD(aggtad_match,maxval = aggtad_match[26,75]*1.2,title="CTCF loops")
-
-plotAggTAD(aggtad_dm,maxval = aggtad_dm[26,75]*1.2,title="D.mel loops")
-
+plotAggTAD(aggtad_match,maxval = aggtad_match[26,75]*1.2,title="CTCF loops (1kb res)")
 
 #------------------------- Plot TAD enrichment ---------------------#
 
@@ -146,6 +131,7 @@ plotAggTAD(aggtad_dm,maxval = aggtad_dm[26,75]*1.2,title="D.mel loops")
 par(mgp=c(3,.3,0))
 plot(1,type="n",xaxt="n",yaxt="n",ann=F,xlim=c(1,76),ylim=c(.9,1.6))
 abline(v=c(26,51),lty=2,col="grey90")
+
 data = aggtad_match[cbind(1:76, 25:100)]
 bg   = median(data[c(1:20,56:76)])
 lines(data/bg,type="l",col="blue")
@@ -156,37 +142,7 @@ lines(data/bg,type="l",col="red")
 
 axis(side=2,las=2,tcl=0.2,at=seq(1,1.6,.2))
 axis(side=1,at = c(26,51),labels=c("left","right"))
-legend("topright",bty="n",col=c("blue","red"),legend=c("C","Y"),lty=1)
-
-#------------------------- PLot APAs of gained loops in HEKs and T47Ds ---------------------#
-
-buffer = 10
-res = 10000
-norm="NONE"
-
-apa_gain_T47D_untr = aggregateLoops(loops = filteredLoops,
-                                    hic = "external/HYPE/data/raw/hic/hg38/220718_dietJuicerMerge_treatment/cont/HYPE_T47D_None_inter_30.hic",
-                                    res = res,buffer = buffer,norm=norm)
-apa_gain_T47D_Nacl = aggregateLoops(loops = filteredLoops,
-                                    hic = "external/HYPE/data/raw/hic/hg38/220718_dietJuicerMerge_treatment/nacl/HYPE_T47D_NaCl_inter_30.hic",
-                                    res = res,buffer = buffer,norm=norm)
-
-norm="SCALE"
-apa_gain_HEK_untr = aggregateLoops(loops = filteredLoops,
-                                   hic = "data/raw/hic/hg38/220716_dietJuicerMerge_condition/cont/YAPP_HEK_control_inter_30.hic",
-                                   res = res,buffer = buffer,norm=norm)
-apa_gain_HEK_sorb = aggregateLoops(loops = filteredLoops,
-                                   hic = "data/raw/hic/hg38/220716_dietJuicerMerge_condition/sorb/YAPP_HEK_sorbitol_inter_30.hic",
-                                   res = res,buffer = buffer,norm=norm)
-
-
-# plot HEK data
-plotAggTAD(apa_gain_HEK_untr,maxval = 50,title = "")
-plotAggTAD(apa_gain_HEK_sorb,maxval = 50,title = "")
-
-#plot T47D data
-plotAggTAD(apa_gain_T47D_untr,maxval = 7.5,title = "")
-plotAggTAD(apa_gain_T47D_Nacl,maxval = 7.5,title = "")
+legend("topright",bty="n",col=c("blue","red"),legend=c("nullSet","Gained"),lty=1)
 
 #------------------------- Plot Loop enrichment ---------------------#
 
@@ -204,4 +160,20 @@ lines(data/bg,type="l",col="red")
 
 axis(side=2,las=2,tcl=0.2,at=seq(1,3.5,.5))
 axis(side=1,at = 26,labels="loop pixel")
-legend("topright",bty="n",col=c("blue","red"),legend=c("C","Y"),lty=1)
+legend("topright",bty="n",col=c("blue","red"),legend=c("nullSet", "Gained"),lty=1)
+
+#------------------------- PLot APAs of gained loops in HEKs ---------------------#
+
+buffer = 100
+res = 1e3
+norm="NONE"
+
+apa_gain = aggregateLoops(loops = gained_bed,
+                                    hic = merged_hicFiles[2],
+                                    res = res,buffer = buffer,norm=norm)
+apa_nullSet = aggregateLoops(loops = nullSet,
+                                    hic = merged_hicFiles[1],
+                                    res = res,buffer = buffer,norm=norm)
+# plot HEK data
+plotAggTAD(apa_gain,maxval = 50,title = "")
+plotAggTAD(apa_nullSet,maxval = 50,title = "")

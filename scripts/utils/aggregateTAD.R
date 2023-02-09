@@ -10,6 +10,8 @@ aggregateTAD <- function(loops,hic,buffer=.5,res,size=100,norm="SCALE")
   # remove interchrom loops
   loops = loops[which(loops[,1] == loops[,4]),]
   
+  ## can modify to take Ginteractions
+  
   # define window to plot
   loops$size = (loops[,5]- loops[,2])/res
   loops$bufferstart = res*(loops[,2]/res - round(loops$size*buffer))
@@ -65,7 +67,7 @@ aggregateTAD <- function(loops,hic,buffer=.5,res,size=100,norm="SCALE")
       print ("skipping")
       next()
     }
-    
+
     # resize the matrix
     r_wideMat <- raster(wideMat)
     extent(r_wideMat) <- extent(c(-180, 180, -90, 90))
