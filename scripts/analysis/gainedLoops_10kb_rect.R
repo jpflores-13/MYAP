@@ -13,8 +13,8 @@ library(TxDb.Hsapiens.UCSC.hg38.knownGene)
 library(mariner)
 library(plyranges)
 
-diff_loopCounts <- readRDS("data/processed/hic/hg38/diffLoops/bothDroso/diffLoops_bothDroso_10kb.rds")
-diff_loopCounts <- interactions(diff_loopCounts) |> 
+diff_loopCounts <- readRDS("data/processed/hic/hg38/diffLoops/bothDroso/diffLoops_bothDroso_10kb.rds") |> 
+  interactions() |> 
   as.data.frame() |> 
   as_ginteractions()
 
@@ -60,12 +60,12 @@ gainedLoops <- loops |>
 # Create Survey Plots -----------------------------------------------------
 
 ##make pdf
-pdf(file = "plots/gainedLoops_10kb_rect.pdf",
+pdf(file = "plots/gainedLoops_10kb_rect_HK2chip.pdf",
     width = 5.75,
     height = 8)
 
 ## Loop through each region
-for(i in 1:nrow(loopRegions_gained)){
+for(i in seq_along(loopRegions_gained)){
   
   ## Define parameters
   p <- pgParams(assembly = "hg38",
@@ -74,7 +74,7 @@ for(i in 1:nrow(loopRegions_gained)){
                 chromstart = start(loopRegions_gained)[i],
                 chromend = end(loopRegions_gained)[i],
                 zrange = c(0,100),
-                norm = "VC_SQRT",
+                norm = "SCALE",
                 x = 0.25,
                 width = 5,
                 length = 5,
@@ -146,37 +146,40 @@ for(i in 1:nrow(loopRegions_gained)){
              shift = 0.5,
              type = "arrow",
              col = "#DC3220")
+
+  
+  ## Plot untreated HK2 YAP1 ChIP-seq data
+  plotSignal(param = p,
+             data = "data/raw/chip/hg38/Share_Cai_HK2_YAP.bw",
+             x = 0.25,
+             y = 4.7,
+             linecolor = "#abcc8e",
+             fill = "#abcc8e",
+             height = 0.5)
+  
+  ## Plot untreated HK2 TEAD1 ChIP-seq data
+  plotSignal(param = p,
+             data = "data/raw/chip/hg38/Share_Cai_HK2_TEAD1.bw",
+             x = 0.25,
+             y = 5.3,
+             linecolor = "#abcc8e",
+             fill = "#abcc8e",
+             height = 0.5)
   
   ## Plot control ATAC track
   plotSignal(param = p,
              data = "data/raw/atac/output/mergeSignal/YAPP_HEK_cont_0h.bw",
              x = 0.25,
-             y = 4.7,
+             y = 5.9,
              height = 0.5)
   
   ## Plot sorbitol ATAC track
   plotSignal(param = p,
              data = "data/raw/atac/output/mergeSignal/YAPP_HEK_sorb_1h.bw",
              x = 0.25,
-             y = 5.3,
-             height = 0.5)
-  
-  ## Plot control RNA-seq
-  plotSignal(param = p,
-             data = "data/raw/rna/output/signal/YAPP_HEK_cont_0h_1_1.bw",
-             x = 0.25,
-             y = 5.9,
-             linecolor = "#abcc8e",
-             height = 0.5)
-  
-  ## Plot sorbitol RNA-seq
-  plotSignal(param = p,
-             data = "data/raw/rna/output/signal/YAPP_HEK_sorb_1h_1_1.bw",
-             x = 0.25,
              y = 6.5,
-             linecolor = "#abcc8e",
              height = 0.5)
-  
+
   ## Plot genes
   plotGenes(param = p,
             chrom = p$chrom,
@@ -202,32 +205,34 @@ for(i in 1:nrow(loopRegions_gained)){
            y = 2.6,
            just = c("top", "left"))
   
-  plotText(label = "untreated - ATAC",
+  plotText(label = "untreated - HK2 YAP1",
            x = 0.25,
            y = 4.65,
            fontcolor = "#1d91c0",
            fontsize = 8,
            just = c("top", "left"))
   
-  plotText(label = "+ sorbitol - ATAC",
+  plotText(label = "untreated - HK2 TEAD1",
            x = 0.25,
            y = 5.25,
            fontsize = 8,
            fontcolor = "#1d91c0",
            just = c("top", "left"))
   
-  plotText(label = "untreated - RNA",
+  plotText(label = "untreated - ATAC",
+           x = 0.25,
+           y = 6.45,
+           fontsize = 8,
+           fontcolor = "#abcc8e",
+           just = c("top", "left"))
+  
+  plotText(label = "+ sorbitol - ATAC",
            x = 0.25,
            y = 5.85,
            fontsize = 8,
            fontcolor = "#abcc8e",
            just = c("top", "left"))
   
-  plotText(label = "+ sorbitol - RNA",
-           x = 0.25,
-           y = 6.45,
-           fontsize = 8,
-           fontcolor = "#abcc8e",
-           just = c("top", "left"))
+
 }
 dev.off()

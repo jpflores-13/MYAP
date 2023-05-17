@@ -9,6 +9,8 @@ library(GO.db)
 library(scales)
 library(forcats)
 library(mariner)
+library(ggplot2)
+library(plyranges)
 
 ## load in YAPP Hi-C differential loops
 noDroso_loops <- readRDS("data/processed/hic/hg38/diffLoops/noDroso/diffLoops_noDroso_10kb.rds") |> 
@@ -55,10 +57,49 @@ genes <- GRanges(seqnames = Rle(genes$seqnames),
                  strand = genes$strand,
                  UCSC_gene_id = genes$gene_id)
 
+
+# Figure out % of loops overlapping promoters -----------------------------
+##  overlap promoter regions & gained loops
+promoters_gained <- subsetByOverlaps(gainedLoops, promoters(genes))
+promoters_ctcf <- subsetByOverlaps(ctcfLoops, promoters(genes))
+
+## % of loops at promoters
+(length(promoters_gained)/length(gainedLoops))
+(length(promoters_ctcf)/length(ctcfLoops))
+
+# Stacked Barplot Visualization -------------------------------------------
+## get % of gained loop anchors @ promoters
+
+# create a dataset
+loop_type <- c("Gained", "Gained", "Lost/Existing", "Lost/Existing")
+condition <- c("Gained", "notGained", "Lost/Existing", "notLE")
+value <- c((length(promoters_gained)/length(gainedLoops)),
+           (length(promoters_ctcf)/length(ctcfLoops)),
+           (1 - (length(promoters_gained)/length(gainedLoops))),
+           (1 - (length(promoters_ctcf)/length(ctcfLoops))))
+data <- data.frame(loop_type, condition, value)
+
+# Stacked + percent
+ggplot(data, aes(fill=condition, y=value, x = loop_type)) + 
+  geom_bar(position="fill", stat="identity", width = 0.3) +
+  theme_minimal() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(angle = 90, vjust = 1, hjust = 1),
+        legend.position = "none") +
+  labs(y = "",
+       x = "") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c("#1D91C0", "#33A02C", "lightgrey", "lightgrey"))
+
+
+# Figure out % of anchors overlapping promoters ---------------------------
+
 ## subset all anchors at starts of gained loops
 gainedAnchors_first <- GRanges(seqnames = Rle(seqnames1(gainedLoops)), 
                                ranges = IRanges(start = start(anchors(gainedLoops, type = "first")),
-                                                end = end(anchors(gainedLoops, type = "first"))))
+                                                end = end(anchors(gainedLoops, type = "first")))) 
 
 ## subset all anchors at ends of gained loops
 gainedAnchors_second <- GRanges(seqnames = Rle(seqnames2(gainedLoops)), 
@@ -66,7 +107,8 @@ gainedAnchors_second <- GRanges(seqnames = Rle(seqnames2(gainedLoops)),
                                                 end = end(anchors(gainedLoops, type = "second"))))
 
 ## concatenate 
-gainedAnchors <- c(gainedAnchors_first, gainedAnchors_second)
+gainedAnchors <- bind_ranges(gainedAnchors_first, gainedAnchors_second) |> 
+  plyranges::mutate(loop_number = rep(paste0("loop_", c(1:355)), 2)) 
 
 ## subset all anchors at starts of existing/lost loops
 ctcfAnchors_first <- GRanges(seqnames = Rle(seqnames1(ctcfLoops)), 
@@ -79,11 +121,17 @@ ctcfAnchors_second <- GRanges(seqnames = Rle(seqnames2(ctcfLoops)),
                                                  end = end(anchors(ctcfLoops, type = "second"))))
 
 ## concatenate
-ctcfAnchors <- c(ctcfAnchors_first, ctcfAnchors_second)
+ctcfAnchors <- bind_ranges(ctcfAnchors_first, ctcfAnchors_second) |> 
+  plyranges::mutate(loop_number = rep(paste0("loop_", c(1:34102)), 2)) 
+  
 
 ##  overlap promoter regions & gained loop anchors
-promoters_gained <- subsetByOverlaps(gainedAnchors, promoters(genes))
-promoters_ctcf <- subsetByOverlaps(ctcfAnchors, promoters(genes))
+promoters_gained <- subsetByOverlaps(promoters(genes),gainedAnchors)
+promoters_ctcf <- subsetByOverlaps(promoters(genes), ctcfAnchors)
+
+## % of anchors at promoters
+(length(promoters_gained)/length(gainedAnchors))
+(length(promoters_ctcf)/length(ctcfAnchors))
 
 # Stacked Barplot Visualization -------------------------------------------
 ## get % of gained loop anchors @ promoters
@@ -113,35 +161,123 @@ ggplot(data, aes(fill=condition, y=value, x = loop_type)) +
   scale_fill_manual(values = c("#1D91C0", "#33A02C", "lightgrey", "lightgrey"))
 
 
-## get gene symbols
-ah <- AnnotationHub()
-orgs <- subset(ah, ah$rdataclass == "OrgDb")
-orgdb <- query(orgs, "Homo sapiens")[[1]]
-genes_gainedLoops <- select(orgdb, keys = promoters_gained$UCSC_gene_id, 
-                            columns = c("SYMBOL", "GENENAME")) |> 
-  as.data.frame()
 
-genes_ctcfLoops <- select(orgdb, keys = promoters_ctcf$UCSC_gene_id, 
-                          columns = c("SYMBOL", "GENENAME")) |> 
-  as.data.frame()
+# % of loops connecting 0 promoters ---------------------------------------
+gainedLoops |> 
+  linkOverlaps(promoters(genes))
+
+ctcfLoops |> 
+  linkOverlaps(promoters(genes))
+
+## % of loops connecting 0 promoters
+(length(promoters_gained)/length(gainedLoops))
+(length(promoters_ctcf)/length(ctcfLoops))
+
+# Stacked Barplot Visualization -------------------------------------------
+## % of loops connecting 0 promoters
+library(ggplot2)
+
+# create a dataset
+loop_type <- c("Gained", "Gained", "Lost/Existing", "Lost/Existing")
+condition <- c("Gained", "notGained", "Lost/Existing", "notLE")
+value <- c((length(promoters_gained)/length(gainedAnchors)),
+           (length(promoters_ctcf)/length(ctcfAnchors)),
+           (1 - (length(promoters_gained)/length(gainedAnchors))),
+           (1 - (length(promoters_ctcf)/length(ctcfAnchors))))
+data <- data.frame(loop_type, condition, value)
+
+# Stacked + percent
+ggplot(data, aes(fill=condition, y=value, x = loop_type)) + 
+  geom_bar(position="fill", stat="identity", width = 0.3) +
+  theme_minimal() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(angle = 90, vjust = 1, hjust = 1),
+        legend.position = "none") +
+  labs(y = "",
+       x = "") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c("#1D91C0", "#33A02C", "lightgrey", "lightgrey"))
 
 
-nrow(genes_gainedLoops)
 
-## get GO terms
-go_gained <- select(orgdb, keys = genes_gainedLoops$SYMBOL, "GO", "SYMBOL")
-go2_gained <- select(GO.db, genes_gainedLoops$GO, c("TERM","DEFINITION"), "GOID") 
-go2_gained$TERM
+# % of E-P pairs ----------------------------------------------------------
+enh_gained <- gainedAnchors[!gainedAnchors %over% promoters(genes)]
+enh_ctcf <- ctcfAnchors[!ctcfAnchors %over% promoters(genes)]
 
-go_ctcf <- select(orgdb, keys = genes_ctcfLoops$SYMBOL, "GO", "SYMBOL")
-go2_ctcf <- select(GO.db, genes_ctcfLoops$GO, c("TERM","DEFINITION"), "GOID") 
-go2_ctcf$TERM
+gainedLoops_ep <- gainedLoops |> 
+  linkOverlaps(promoters(genes), enh_gained)
 
-write_csv(genes_ctcfLoops, "tables/genes_atGainedLoopsAnchors.csv")
-write_csv(genes_gainedLoops, "tables/genes_atGainedLoopsAnchors.csv")
+ctcfLoops_ep <- ctcfLoops |> 
+  linkOverlaps(promoters(genes), enh_ctcf)
 
-# ## do any of these genes have multiple gained loops at their promoters?
-# loi <- promoters |> 
-#   subset(UCSC_gene_id %in% c("7004", "83937", "8463", "163732", "79142"))
-# 
-# countOverlaps(loi, gainedLoops)
+## % of loops that connect enhancers to promoters
+(nrow(gainedLoops_ep)/length(gainedAnchors))
+(nrow(ctcfLoops_ep)/length(ctcfAnchors))
+
+# Stacked Barplot Visualization -------------------------------------------
+## % of EP pairs
+library(ggplot2)
+
+# create a dataset
+loop_type <- c("Gained", "Gained", "Lost/Existing", "Lost/Existing")
+condition <- c("Gained", "notGained", "Lost/Existing", "notLE")
+value <- c((nrow(gainedLoops_ep)/length(gainedAnchors)),
+           (nrow(ctcfLoops_ep)/length(ctcfAnchors)),
+           (1 - (nrow(gainedLoops_ep)/length(gainedAnchors))),
+           (1 - (nrow(ctcfLoops_ep)/length(ctcfAnchors))))
+data <- data.frame(loop_type, condition, value)
+
+# Stacked + percent
+ggplot(data, aes(fill=condition, y=value, x = loop_type)) + 
+  geom_bar(position="fill", stat="identity", width = 0.3) +
+  theme_minimal() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(angle = 90, vjust = 1, hjust = 1),
+        legend.position = "none") +
+  labs(y = "",
+       x = "") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c("#1D91C0", "#33A02C", "lightgrey", "lightgrey"))
+
+
+# % of PP pairs -----------------------------------------------------------
+gainedLoops_pp <- gainedLoops |> 
+  linkOverlaps(promoters(genes))
+
+ctcfLoops_pp <- ctcfLoops |> 
+  linkOverlaps(promoters(genes))
+
+## % of loops that connect promoters to promoters
+(nrow(gainedLoops_pp)/length(gainedLoops))
+(nrow(ctcfLoops_pp)/length(ctcfLoops))
+
+# Stacked Barplot Visualization -------------------------------------------
+## % of PP pairs
+library(ggplot2)
+
+# create a dataset
+loop_type <- c("Gained", "Gained", "Lost/Existing", "Lost/Existing")
+condition <- c("Gained", "notGained", "Lost/Existing", "notLE")
+value <- c((nrow(gainedLoops_pp)/length(gainedLoops)),
+           ((nrow(ctcfLoops_pp)/length(ctcfLoops))),
+           (1 - (nrow(gainedLoops_pp)/length(gainedLoops))),
+           (1 - (nrow(ctcfLoops_pp)/length(ctcfLoops))))
+data <- data.frame(loop_type, condition, value)
+
+# Stacked + percent
+ggplot(data, aes(fill=condition, y=value, x = loop_type)) + 
+  geom_bar(position="fill", stat="identity", width = 0.3) +
+  theme_minimal() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(angle = 90, vjust = 1, hjust = 1),
+        legend.position = "none") +
+  labs(y = "",
+       x = "") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c("#1D91C0", "#33A02C", "lightgrey", "lightgrey"))

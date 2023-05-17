@@ -10,12 +10,11 @@ library(scales)
 library(forcats)
 library(mariner)
 library(memes)
+library(nullranges)
 
 ## load in YAPP Hi-C differential loops
 noDroso_loops <- readRDS("data/processed/hic/hg38/diffLoops/noDroso/diffLoops_noDroso_10kb.rds") |> 
-  interactions() |> 
-  as.data.frame() |>
-  mariner::as_ginteractions()
+  interactions()
 
 ## create new metadata columns for loop type & loop size
 mcols(noDroso_loops)$loop_type <- case_when(
@@ -26,6 +25,31 @@ mcols(noDroso_loops)$loop_type <- case_when(
 
 mcols(noDroso_loops)$loop_size <- pairdist(noDroso_loops)
 
+## create aggregated sorb counts mcol
+mcols(noDroso_loops)$sorb_contacts <- mcols(noDroso_loops)$YAPP_HEK_sorbitol_4_2_inter_30.hic +
+  mcols(noDroso_loops)$YAPP_HEK_sorbitol_5_2_inter_30.hic + mcols(noDroso_loops)$YAPP_HEK_sorbitol_6_2_inter_30.hic
+
+## create aggregated cont counts mcol
+mcols(noDroso_loops)$cont_contacts <- mcols(noDroso_loops)$YAPP_HEK_control_1_2_inter_30.hic +
+  mcols(noDroso_loops)$YAPP_HEK_control_2_2_inter_30.hic + mcols(noDroso_loops)$YAPP_HEK_control_3_2_inter_30.hic
+
+## create aggregated sorb+cont counts mcol
+mcols(noDroso_loops)$agg_contacts <- mcols(noDroso_loops)$sorb_contacts + mcols(noDroso_loops)$cont_contacts
+
+## log transform loop_size to get a normal distribution for matchRanges
+mcols(noDroso_loops)$loop_size <- log(mcols(noDroso_loops)$loop_size)
+hist(mcols(noDroso_loops)$loop_size) # check for normality
+
+# ## convert all `0` agg_contact values to NAs and log transform for matchRanges
+# mcols(noDroso_loops)$agg_contacts[mcols(noDroso_loops)$agg_contacts == 0] <- NA
+# noDroso_loops <- interactions(noDroso_loops) |> # no longer InteractionMatrix class
+#   as.data.frame() |> 
+#   na.omit() |> 
+#   as_ginteractions()
+
+mcols(noDroso_loops)$agg_contacts <- log((mcols(noDroso_loops)$agg_contacts + 1))
+hist(mcols(noDroso_loops)$agg_contacts) # check for normality
+
 ## Add seqinfo to object
 txdb <- 
   TxDb.Hsapiens.UCSC.hg38.knownGene |>
@@ -35,10 +59,10 @@ seqlevels(noDroso_loops) <- seqlevels(txdb)
 seqinfo(noDroso_loops) <- seqinfo(txdb)
 
 ## subset gained loops
-gainedLoops <- noDroso_loops |> 
+gainedLoops <- noDroso_loops |>
   subset(loop_type == "gained")
 
-ctcfLoops <- noDroso_loops |> 
+ctcfLoops <- noDroso_loops |>
   subset(!loop_type == "gained")
 
 ## genes
@@ -59,12 +83,16 @@ genes <- GRanges(seqnames = Rle(genes$seqnames),
 ## subset all anchors at starts of gained loops
 gainedAnchors_first <- GRanges(seqnames = Rle(seqnames1(gainedLoops)), 
                                ranges = IRanges(start = start(anchors(gainedLoops, type = "first")),
-                                                end = end(anchors(gainedLoops, type = "first"))))
+                                                end = end(anchors(gainedLoops, type = "first"))),
+                               loop_size = gainedLoops$loop_size,
+                               agg_contacts = gainedLoops$agg_contacts)
 
 ## subset all anchors at ends of gained loops
 gainedAnchors_second <- GRanges(seqnames = Rle(seqnames2(gainedLoops)), 
                                 ranges = IRanges(start = start(anchors(gainedLoops, type = "second")),
-                                                 end = end(anchors(gainedLoops, type = "second"))))
+                                                 end = end(anchors(gainedLoops, type = "second"))),
+                                loop_size = gainedLoops$loop_size,
+                                agg_contacts = gainedLoops$agg_contacts)
 
 ## concatenate 
 gainedAnchors <- c(gainedAnchors_first, gainedAnchors_second)
@@ -72,12 +100,16 @@ gainedAnchors <- c(gainedAnchors_first, gainedAnchors_second)
 ## subset all anchors at starts of existing/lost loops
 ctcfAnchors_first <- GRanges(seqnames = Rle(seqnames1(ctcfLoops)), 
                              ranges = IRanges(start = start(anchors(ctcfLoops, type = "first")),
-                                              end = end(anchors(ctcfLoops, type = "first"))))
+                                              end = end(anchors(ctcfLoops, type = "first"))),
+                             loop_size = ctcfLoops$loop_size,
+                             agg_contacts = ctcfLoops$agg_contacts)
 
 ## subset all anchors at ends of existing/lost loops
 ctcfAnchors_second <- GRanges(seqnames = Rle(seqnames2(ctcfLoops)), 
                               ranges = IRanges(start = start(anchors(ctcfLoops, type = "second")),
-                                               end = end(anchors(ctcfLoops, type = "second"))))
+                                               end = end(anchors(ctcfLoops, type = "second"))),
+                              loop_size = ctcfLoops$loop_size,
+                              agg_contacts = ctcfLoops$agg_contacts)
 
 ## concatenate
 ctcfAnchors <- c(ctcfAnchors_first, ctcfAnchors_second)
@@ -87,28 +119,54 @@ promoters <- promoters(genes) |>
   keepStandardChromosomes(pruning.mode = c("coarse"))
 
 ##  overlap promoter regions & gained loop anchors
-promoters_gained <- subsetByOverlaps(gainedAnchors, promoters)
-promoters_ctcf <- subsetByOverlaps(ctcfAnchors, promoters)
+promoters_gained <- subsetByOverlaps(promoters, gainedAnchors)
+promoters_ctcf <- subsetByOverlaps(promoters, ctcfAnchors)
+
+# Matched set for gained YAPP loops ---------------------------------------
+## use matchRanges to select a null set of control sample loops that is matched for size & contact frequency
+focal <- noDroso_loops[!noDroso_loops$loop_type %in% c("static", "lost","other")] 
+pool <- noDroso_loops[noDroso_loops$loop_type %in% c("static", "lost","other")] 
+
+nullSet <- matchRanges(focal = focal,
+                       pool = pool,
+                       covar = ~ agg_contacts + loop_size, 
+                       method = 'stratified',
+                       replace = F)
+
+plotCovariate(nullSet)
+plotCovariate(nullSet, covar = "loop_size")
+plotPropensity(nullSet, sets = c('f', 'p', 'm'), log = 'x')
 
 # Prep for MEME ----------------------------------------------------------
 human.genome <- BSgenome.Hsapiens.UCSC.hg38::BSgenome.Hsapiens.UCSC.hg38
 
 ## get sequences of background peaks
 sequence_promoters <- promoters |>
-  get_sequence(human.genome)
-
-memes::write_fasta(seq = sequence_promoters)
+  unique() |> 
+  get_sequence(human.genome) 
 
 ## get sequences of focal peaks
 sequence_focal_gained <- promoters_gained |> 
+  unique() |> 
   get_sequence(human.genome) 
-
-memes::write_fasta(seq = sequence_focal_gained)
 
 sequence_focal_ctcf <- promoters_ctcf |> 
+  unique() |> 
   get_sequence(human.genome) 
 
-memes::write_fasta(seq = sequence_focal_ctcf)
+## run AME
+ame_gained <- runAme(sequence_focal_gained,
+                     control = sequence_promoters,
+                     outdir = "tables/loops/ame/gained/",
+                     database = "data/raw/atac/meme_files/HOCOMOCOv11_full_HUMAN_mono_meme_format.meme",
+                     silent = F)
+
+ame_lost <- runAme(sequence_focal_ctcf,
+                   control = sequence_promoters,
+                     outdir = "tables/loops/ame/lost/",
+                     database = "data/raw/atac/meme_files/HOCOMOCOv11_full_HUMAN_mono_meme_format.meme", 
+                   silent = F)
+
 
 # input sequences on web browser MEME suite -------------------------------
 
@@ -117,7 +175,8 @@ ame_gained <- read.table("tables/loops/ame/gained/ame.tsv",
                          header = T)
 
 ame_lost <- read.table("tables/loops/ame/lost/ame.tsv",
-                       header = T)
+                       header = T, 
+                       fill = T)
 
 
 # Visualization -----------------------------------------------------------

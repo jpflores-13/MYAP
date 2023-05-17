@@ -4,9 +4,7 @@ library(mariner)
 library(tidyverse)
 
 loops <- readRDS("data/processed/hic/hg38/diffLoops/noDroso/diffLoops_noDroso_10kb.rds") |> 
-  interactions() |> 
-  as.data.frame() |> 
-  as_ginteractions()
+  interactions()
 
 ## create an mcol for loop size
 mcols(loops)$loop_size <- pairdist(loops)
@@ -29,7 +27,8 @@ loops_gr <-
           ranges = IRanges(start = start(anchors(loops, "first")),
                            end = end(anchors(loops, "second"))))
 
-# saveRDS(loops, "data/processed/hic/hg38/diffLoops/noDroso/fish_loopCandidates.rds")
+saveRDS(loops, "data/processed/hic/hg38/diffLoops/noDroso/fish_gainedLoopCandidates.rds")
+
 
 # Create survey plots to visualize FISH candidates ------------------------
 
@@ -38,7 +37,7 @@ buffer <- 250e3
 loops_buffed <- loops_gr + buffer
 
 ##make pdf
-pdf(file = "plots/findFISHcandidates_300kb.pdf",
+pdf(file = "plots/findFISHcandidates_gained.pdf",
     width = 5.75,
     height = 5.6)
 
